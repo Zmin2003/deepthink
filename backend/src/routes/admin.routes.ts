@@ -9,6 +9,7 @@ import {
   adminGuard,
   JWTPayload
 } from '../middleware/auth.middleware.js';
+import { LLMFactory } from '../services/llm/LLMFactory.js';
 
 const LLMConfigSchema = z.object({
   provider: z.enum(['openai', 'anthropic', 'google']).optional(),
@@ -132,6 +133,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
   fastify.put('/admin/config/llm', async (request, reply) => {
     const config = LLMConfigSchema.parse(request.body);
     configStore.setLLMConfig(config);
+    // Invalidate cached LLM provider instances since config changed
+    LLMFactory.clearCache();
     return { success: true, config: maskSensitiveConfig(configStore.getLLMConfig()) };
   });
 
@@ -184,8 +187,6 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // 测试 LLM 连接
   fastify.post('/admin/test-llm', async (request, reply) => {
-    const { LLMFactory } = await import('../services/llm/LLMFactory.js');
-
     try {
       const llm = LLMFactory.createLLM();
       const result = await llm.complete({

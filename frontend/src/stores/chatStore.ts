@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import type { Session, Message, ThinkingState, ExpertResult } from '@/types/chat';
 
 const STORAGE_KEY = 'deepthink_sessions';
+const SAVE_DEBOUNCE_MS = 300;
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
@@ -19,7 +20,32 @@ function loadFromStorage(): { sessions: Session[]; sessionsData: Record<string, 
   return { sessions: [], sessionsData: {} };
 }
 
+/**
+ * Debounced save: avoids hammering localStorage.setItem on rapid updates
+ * (e.g., during streaming expert responses that trigger multiple updateLastMessage calls).
+ */
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
 function saveToStorage(sessions: Session[], sessionsData: Record<string, Message[]>) {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ sessions, sessionsData }));
+    } catch (e) {
+      console.error('Failed to save sessions to storage:', e);
+    }
+    saveTimer = null;
+  }, SAVE_DEBOUNCE_MS);
+}
+
+/**
+ * Immediate save for critical operations (session creation/deletion).
+ */
+function saveToStorageImmediate(sessions: Session[], sessionsData: Record<string, Message[]>) {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ sessions, sessionsData }));
   } catch (e) {
@@ -80,7 +106,7 @@ export const useChatStore = defineStore('chat', {
       this.sessions.unshift(session);
       this.sessionsData[session.id] = [];
       this.currentSessionId = session.id;
-      this.saveState();
+      this.saveStateImmediate();
 
       return session;
     },
@@ -95,7 +121,7 @@ export const useChatStore = defineStore('chat', {
           this.currentSessionId = this.sessions.length > 0 ? this.sessions[0].id : null;
         }
 
-        this.saveState();
+        this.saveStateImmediate();
       }
     },
 
@@ -153,7 +179,7 @@ export const useChatStore = defineStore('chat', {
     clearCurrentSession() {
       if (this.currentSessionId) {
         this.sessionsData[this.currentSessionId] = [];
-        this.saveState();
+        this.saveStateImmediate();
       }
     },
 
@@ -225,6 +251,10 @@ export const useChatStore = defineStore('chat', {
 
     saveState() {
       saveToStorage(this.sessions, this.sessionsData);
+    },
+
+    saveStateImmediate() {
+      saveToStorageImmediate(this.sessions, this.sessionsData);
     },
   },
 });

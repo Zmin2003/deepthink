@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosInstance } from 'axios';
 
 export interface SearchResult {
   title: string;
@@ -6,6 +6,22 @@ export interface SearchResult {
   snippet: string;
   score?: number;
 }
+
+/**
+ * Shared axios instances with HTTP keep-alive for connection reuse.
+ * One per search provider to avoid cross-provider header leaks.
+ */
+const exaClient: AxiosInstance = axios.create({
+  baseURL: 'https://api.exa.ai',
+  timeout: 10000,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+const tavilyClient: AxiosInstance = axios.create({
+  baseURL: 'https://api.tavily.com',
+  timeout: 10000,
+  headers: { 'Content-Type': 'application/json' },
+});
 
 export class SearchService {
   private exaApiKey: string;
@@ -48,8 +64,8 @@ export class SearchService {
       throw new Error('Exa API key not configured');
     }
 
-    const response = await axios.post(
-      'https://api.exa.ai/search',
+    const response = await exaClient.post(
+      '/search',
       {
         query,
         numResults: maxResults,
@@ -61,9 +77,7 @@ export class SearchService {
       {
         headers: {
           'x-api-key': this.exaApiKey,
-          'Content-Type': 'application/json',
         },
-        timeout: 10000,
       }
     );
 
@@ -81,8 +95,8 @@ export class SearchService {
       throw new Error('Tavily API key not configured');
     }
 
-    const response = await axios.post(
-      'https://api.tavily.com/search',
+    const response = await tavilyClient.post(
+      '/search',
       {
         api_key: this.tavilyApiKey,
         query,
@@ -90,12 +104,6 @@ export class SearchService {
         search_depth: 'basic',
         include_answer: false,
         include_raw_content: false,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        timeout: 10000,
       }
     );
 

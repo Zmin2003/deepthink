@@ -101,21 +101,22 @@ export class TaskManager extends EventEmitter {
     return `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  // 清理过期任务
+  // 清理过期任务 - single-pass iteration
   cleanup() {
     const now = Date.now();
-    const expiredTasks: string[] = [];
+    let cleanedCount = 0;
 
-    this.tasks.forEach((task, taskId) => {
+    for (const [taskId, task] of this.tasks) {
       if (now - task.lastUpdateAt > this.TASK_TIMEOUT) {
-        expiredTasks.push(taskId);
+        this.clearTaskTimeout(taskId);
+        this.tasks.delete(taskId);
+        this.removeAllListeners(`task:${taskId}`);
+        cleanedCount++;
       }
-    });
+    }
 
-    expiredTasks.forEach(taskId => this.deleteTask(taskId));
-
-    if (expiredTasks.length > 0) {
-      console.log(`[TaskManager] Cleaned up ${expiredTasks.length} expired tasks`);
+    if (cleanedCount > 0) {
+      console.log(`[TaskManager] Cleaned up ${cleanedCount} expired tasks`);
     }
   }
 }

@@ -44,9 +44,9 @@ const EXPERT_PROMPT = `你是一位{role}专家。{description}
 {context}
 
 重要约束：
-- 如果参考资料包含“文件内容/文件分析总结”，优先基于文件证据回答。
+- 如果参考资料包含"文件内容/文件分析总结"，优先基于文件证据回答。
 - 不要编造文件中不存在的事实。
-- 若证据不足，明确写“无法从当前文件内容确认”。
+- 若证据不足，明确写"无法从当前文件内容确认"。
 
 请用 <thoughts> 标签包裹思考过程，用 <response> 标签包裹最终回答。`;
 
@@ -69,6 +69,17 @@ const SEARCH_NEEDED_HINTS = [
   'latest', 'current', 'today', 'real-time', 'internet', 'web', 'search', 'official', 'standard', 'cve',
 ];
 
+// Pre-compiled regexes for expert response parsing (avoid re-compilation per expert)
+const THOUGHTS_RE = /<thoughts>([\s\S]*?)<\/thoughts>/;
+const RESPONSE_RE = /<response>([\s\S]*?)<\/response>/;
+// Pre-compiled regexes for file text extraction
+const FILE_HEADER_RE = /^###\s*文件:.*$/gim;
+const SEPARATOR_RE = /^[-]{3,}$/gim;
+const WHITESPACE_RE = /\s+/g;
+
+/** Maximum concurrent expert LLM calls to avoid rate-limiting and resource exhaustion. */
+const MAX_EXPERT_CONCURRENCY = 4;
+
 function isFileRelatedQuery(query: string): boolean {
   const q = (query || '').toLowerCase();
   return FILE_REQUIRED_HINTS.some(k => q.includes(k));
@@ -87,9 +98,9 @@ function extractMeaningfulFileText(fileContext: string): string {
   if (!fileContext) return '';
 
   return fileContext
-    .replace(/^###\s*文件:.*$/gim, '')
-    .replace(/^[-]{3,}$/gim, '')
-    .replace(/\s+/g, ' ')
+    .replace(FILE_HEADER_RE, '')
+    .replace(SEPARATOR_RE, '')
+    .replace(WHITESPACE_RE, ' ')
     .trim();
 }
 
@@ -145,6 +156,54 @@ function normalizeExperts(rawExperts: any[], complexityRaw?: string): ExpertConf
   }
 
   return result.slice(0, bounds.max);
+}
+
+/**
+ * Simple concurrency limiter for parallel async tasks.
+ * Ensures at most `limit` tasks run concurrently.
+ */
+function limitConcurrency<T>(
+  tasks: (() => Promise<T>)[],
+  limit: number,
+): Promise<T[]> {
+  return new Promise((resolve, reject) => {
+    const results: T[] = new Array(tasks.length);
+    let running = 0;
+    let nextIndex = 0;
+    let completed = 0;
+    let rejected = false;
+
+    function runNext() {
+      while (running < limit && nextIndex < tasks.length) {
+        const idx = nextIndex++;
+        running++;
+        tasks[idx]()
+          .then((result) => {
+            if (rejected) return;
+            results[idx] = result;
+            running--;
+            completed++;
+            if (completed === tasks.length) {
+              resolve(results);
+            } else {
+              runNext();
+            }
+          })
+          .catch((err) => {
+            if (!rejected) {
+              rejected = true;
+              reject(err);
+            }
+          });
+      }
+    }
+
+    if (tasks.length === 0) {
+      resolve([]);
+    } else {
+      runNext();
+    }
+  });
 }
 
 export class DeepThinkEngine {
@@ -252,7 +311,7 @@ export class DeepThinkEngine {
 
     yield { type: 'node_complete', node: 'search', state };
 
-    // Step 4: 专家分析（真正并行执行）
+    // Step 4: 专家分析（并行执行，带并发限制以避免 API 速率限制）
     yield {
       type: 'node_start',
       node: 'experts',
@@ -264,13 +323,15 @@ export class DeepThinkEngine {
     const resultsQueue: ExpertResult[] = [];
     let resolveNext: ((result: ExpertResult) => void) | null = null;
 
-    // 启动所有专家并行执行
-    const expertPromises = experts.map(async (expert: ExpertConfig) => {
+    const contextStr = state.context || '无额外上下文';
+
+    // Build expert task closures
+    const expertTasks = experts.map((expert: ExpertConfig) => async () => {
       const expertPrompt = EXPERT_PROMPT
         .replace('{role}', expert.role)
         .replace('{description}', expert.description || '')
         .replace('{query}', query)
-        .replace('{context}', state.context || '无额外上下文');
+        .replace('{context}', contextStr);
 
       const expertResponse = await llm.complete({
         messages: [
@@ -279,8 +340,8 @@ export class DeepThinkEngine {
         temperature: 0.7,
       });
 
-      const thoughtsMatch = expertResponse.content.match(/<thoughts>([\s\S]*?)<\/thoughts>/);
-      const responseMatch = expertResponse.content.match(/<response>([\s\S]*?)<\/response>/);
+      const thoughtsMatch = expertResponse.content.match(THOUGHTS_RE);
+      const responseMatch = expertResponse.content.match(RESPONSE_RE);
 
       const result: ExpertResult = {
         id: `expert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -292,7 +353,7 @@ export class DeepThinkEngine {
         status: 'completed',
       };
 
-      // 完成后加入队列
+      // Push to queue for streaming yield
       if (resolveNext) {
         resolveNext(result);
         resolveNext = null;
@@ -303,8 +364,8 @@ export class DeepThinkEngine {
       return result;
     });
 
-    // 等待所有专家完成，每完成一个就 yield
-    const allDone = Promise.all(expertPromises);
+    // Launch experts with concurrency limit
+    const allDone = limitConcurrency(expertTasks, MAX_EXPERT_CONCURRENCY);
     let completed = 0;
     const total = experts.length;
 

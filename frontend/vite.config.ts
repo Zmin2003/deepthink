@@ -20,6 +20,19 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, './src'),
       },
     },
+    build: {
+      // Improve chunk splitting for better caching
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-vue': ['vue', 'vue-router', 'pinia'],
+            'vendor-markdown': ['markdown-it'],
+          },
+        },
+      },
+      // Increase warning threshold to avoid noise
+      chunkSizeWarningLimit: 600,
+    },
     server: {
       host: true,
       port: 5173,

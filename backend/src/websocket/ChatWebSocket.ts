@@ -1,40 +1,44 @@
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
 import { DeepThinkEngine } from '../services/deepthink/DeepThinkEngine.js';
+import { logger } from '../utils/logger.js';
+
+// Pre-serialized pong response (avoid JSON.stringify on every ping)
+const PONG_MSG = JSON.stringify({ type: 'pong' });
 
 export function setupWebSocket(fastify: FastifyInstance) {
   fastify.get('/ws/chat', { websocket: true }, (socket: WebSocket, req) => {
-    console.log('WebSocket connection established');
+    logger.info('WebSocket connection established');
 
     let isProcessing = false;
 
     socket.on('message', async (message) => {
       try {
         const msgStr = message.toString();
-        console.log('Raw message received:', msgStr);
+        logger.debug({ raw: msgStr }, 'Raw message received');
 
         const data = JSON.parse(msgStr);
 
         // 忽略 ping 消息
         if (data.type === 'ping') {
-          socket.send(JSON.stringify({ type: 'pong' }));
+          socket.send(PONG_MSG);
           return;
         }
 
         // 如果正在处理中，忽略新消息
         if (isProcessing) {
-          console.log('Already processing, ignoring message');
+          logger.debug('Already processing, ignoring message');
           return;
         }
 
         const query = data.query;
 
         if (!query) {
-          console.log('No query in message, ignoring');
+          logger.debug('No query in message, ignoring');
           return;
         }
 
-        console.log('Received query:', query);
+        logger.info({ query }, 'Received query');
 
         isProcessing = true;
         const engine = new DeepThinkEngine();
@@ -49,7 +53,7 @@ export function setupWebSocket(fastify: FastifyInstance) {
           // 流式执行
           for await (const update of engine.stream(query, streamConfig)) {
             if (socket.readyState !== 1) {
-              console.log('WebSocket closed, stopping');
+              logger.info('WebSocket closed, stopping');
               break;
             }
 
@@ -91,7 +95,7 @@ export function setupWebSocket(fastify: FastifyInstance) {
           isProcessing = false;
         }
       } catch (error: any) {
-        console.error('WebSocket error:', error);
+        logger.error({ err: error }, 'WebSocket error');
         if (socket.readyState === 1) {
           socket.send(JSON.stringify({
             type: 'error',
@@ -102,11 +106,11 @@ export function setupWebSocket(fastify: FastifyInstance) {
     });
 
     socket.on('close', () => {
-      console.log('WebSocket connection closed');
+      logger.info('WebSocket connection closed');
     });
 
     socket.on('error', (error) => {
-      console.error('WebSocket error:', error);
+      logger.error({ err: error }, 'WebSocket error');
     });
   });
 }

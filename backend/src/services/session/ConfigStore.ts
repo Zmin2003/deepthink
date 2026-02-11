@@ -10,6 +10,21 @@ export class ConfigStore {
   private dbPath: string;
   private initialized = false;
 
+  /**
+   * In-memory config cache to avoid repeated SQLite reads for hot-path config lookups.
+   * Invalidated on writes via setConfig/deleteConfig.
+   */
+  private configCache = new Map<string, string | null>();
+  private configCacheValid = false;
+
+  /**
+   * Debounced save: coalesces multiple rapid writes into a single disk flush.
+   * The timer ensures we don't write to disk more than once per 100ms window.
+   */
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly SAVE_DEBOUNCE_MS = 100;
+  private savePending = false;
+
   constructor(dbPath: string) {
     this.dbPath = dbPath;
   }
@@ -29,7 +44,8 @@ export class ConfigStore {
 
     this.initTables();
     this.initDefaultConfig();
-    this.save();
+    // Use immediate save at the end of init to ensure initial state is persisted
+    this.saveImmediate();
     this.initialized = true;
   }
 
@@ -140,6 +156,28 @@ export class ConfigStore {
   private save() {
     if (!this.db) return;
 
+    // Mark that a save is pending
+    this.savePending = true;
+
+    // Debounce: if a timer is already set, the pending flag ensures
+    // the latest state will be written when it fires.
+    if (this.saveTimer) return;
+
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      if (this.savePending) {
+        this.savePending = false;
+        this.flushToDisk();
+      }
+    }, this.SAVE_DEBOUNCE_MS);
+  }
+
+  /**
+   * Immediately persist the database to disk. Called by debounce timer and close().
+   */
+  private flushToDisk() {
+    if (!this.db) return;
+
     const data = this.db.export();
     const buffer = Buffer.from(data);
 
@@ -150,6 +188,26 @@ export class ConfigStore {
     }
 
     fs.writeFileSync(this.dbPath, buffer);
+  }
+
+  /**
+   * Force an immediate save (bypasses debounce). Use sparingly.
+   */
+  private saveImmediate() {
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    this.savePending = false;
+    this.flushToDisk();
+  }
+
+  /**
+   * Invalidate the in-memory config cache after writes.
+   */
+  private invalidateConfigCache() {
+    this.configCache.clear();
+    this.configCacheValid = false;
   }
 
   // Config CRUD
@@ -165,14 +223,22 @@ export class ConfigStore {
          updated_at = excluded.updated_at`,
       [key, value, category, description || '', now]
     );
+    this.invalidateConfigCache();
     this.save();
   }
 
   getConfig(key: string): string | null {
     if (!this.db) return null;
 
+    // Check in-memory cache first
+    if (this.configCache.has(key)) {
+      return this.configCache.get(key) ?? null;
+    }
+
     const result = this.db.exec('SELECT value FROM system_config WHERE key = ?', [key]);
-    return result[0]?.values[0]?.[0] as string || null;
+    const value = result[0]?.values[0]?.[0] as string || null;
+    this.configCache.set(key, value);
+    return value;
   }
 
   getAllConfig(): SystemConfig[] {
@@ -210,6 +276,7 @@ export class ConfigStore {
   deleteConfig(key: string) {
     if (!this.db) return;
     this.db.run('DELETE FROM system_config WHERE key = ?', [key]);
+    this.invalidateConfigCache();
     this.save();
   }
 
@@ -425,7 +492,7 @@ export class ConfigStore {
 
   close() {
     if (this.db) {
-      this.save();
+      this.saveImmediate();
       this.db.close();
     }
   }

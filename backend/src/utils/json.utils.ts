@@ -1,31 +1,28 @@
-export function parseJSONSafely(content: string): any {
-  try {
-    // 移除可能的 markdown 代码块
-    let cleaned = content.trim();
-    cleaned = cleaned.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+// Pre-compiled regexes for JSON cleanup
+const MARKDOWN_JSON_RE = /```json\n?/g;
+const MARKDOWN_CLOSE_RE = /```\n?/g;
 
-    // 尝试解析
+export function parseJSONSafely(content: string): any {
+  // Single pass: clean markdown fences, then attempt parse
+  let cleaned = content.trim();
+  cleaned = cleaned.replace(MARKDOWN_JSON_RE, '').replace(MARKDOWN_CLOSE_RE, '');
+
+  try {
     return JSON.parse(cleaned);
   } catch (error) {
-    // 如果解析失败，尝试修复常见问题
-    try {
-      let fixed = content.trim();
+    // Fallback: extract the outermost { ... } block
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
 
-      // 移除 markdown
-      fixed = fixed.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-
-      // 尝试找到第一个 { 和最后一个 }
-      const firstBrace = fixed.indexOf('{');
-      const lastBrace = fixed.lastIndexOf('}');
-
-      if (firstBrace !== -1 && lastBrace !== -1) {
-        fixed = fixed.substring(firstBrace, lastBrace + 1);
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      try {
+        return JSON.parse(cleaned.substring(firstBrace, lastBrace + 1));
+      } catch {
+        // fall through to throw
       }
-
-      return JSON.parse(fixed);
-    } catch (secondError) {
-      throw new Error(`Failed to parse JSON: ${(error as Error).message}`);
     }
+
+    throw new Error(`Failed to parse JSON: ${(error as Error).message}`);
   }
 }
 

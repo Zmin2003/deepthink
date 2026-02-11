@@ -7,19 +7,25 @@ import { adminRoutes } from './routes/admin.routes.js';
 import { chatRoutes } from './routes/chat.routes.js';
 import { setupWebSocket } from './websocket/ChatWebSocket.js';
 
+const isDev = process.env.NODE_ENV !== 'production';
+
 export async function createServer() {
   const fastify = Fastify({
-    logger: {
-      level: config.log.level,
-      transport: {
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          translateTime: 'HH:MM:ss',
-          ignore: 'pid,hostname',
+    logger: isDev
+      ? {
+          level: config.log.level,
+          transport: {
+            target: 'pino-pretty',
+            options: {
+              colorize: true,
+              translateTime: 'HH:MM:ss',
+              ignore: 'pid,hostname',
+            },
+          },
+        }
+      : {
+          level: config.log.level,
         },
-      },
-    },
   });
 
   // Register plugins
