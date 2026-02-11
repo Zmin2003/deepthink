@@ -24,6 +24,7 @@ export interface AgentState {
 
   // Synthesis
   synthesisThoughts?: string;
+  fileSummary?: string;
   finalOutput: string;
   structuredOutput?: any;
 

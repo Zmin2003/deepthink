@@ -291,67 +291,35 @@
           </div>
         </section>
 
-        <!-- Users -->
-        <section v-if="activeTab === 'users'" class="config-section">
+        <!-- Account -->
+        <section v-if="activeTab === 'account'" class="config-section">
           <div class="section-header">
-            <h2>用户管理</h2>
-            <p>管理管理员和用户账户</p>
+            <h2>管理员账号</h2>
+            <p>系统仅保留当前管理员账号，可在此修改用户名和密码</p>
           </div>
 
-          <div class="users-list">
-            <div v-for="user in users" :key="user.id" class="user-item">
-              <div class="user-avatar">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-                  <circle cx="12" cy="7" r="4"/>
-                </svg>
-              </div>
-              <div class="user-info">
-                <span class="user-name">{{ user.username }}</span>
-                <span class="user-role" :class="user.role">{{ user.role }}</span>
-              </div>
-              <button
-                v-if="user.id !== 1"
-                @click="deleteUser(user.id)"
-                class="delete-btn"
-                title="删除用户"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                </svg>
-              </button>
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label>用户名</label>
+              <input v-model="accountForm.username" type="text" placeholder="输入用户名" />
+            </div>
+            <div class="form-group full-width">
+              <label>新密码（可选）</label>
+              <input v-model="accountForm.newPassword" type="password" placeholder="留空则不修改密码" />
+              <span class="hint">密码至少 6 位</span>
             </div>
           </div>
 
-          <div class="add-user-form">
-            <h3>添加新用户</h3>
-            <div class="form-grid">
-              <div class="form-group">
-                <label>用户名</label>
-                <input v-model="newUser.username" type="text" placeholder="输入用户名" />
-              </div>
-              <div class="form-group">
-                <label>密码</label>
-                <input v-model="newUser.password" type="password" placeholder="输入密码" />
-              </div>
-              <div class="form-group">
-                <label>角色</label>
-                <select v-model="newUser.role">
-                  <option value="user">用户</option>
-                  <option value="admin">管理员</option>
-                </select>
-              </div>
-            </div>
-            <button
-              @click="createUser"
-              class="add-btn"
-              :disabled="!newUser.username || !newUser.password"
-            >
+          <div class="form-actions">
+            <button @click="saveAccount" class="save-btn" :disabled="!accountForm.username">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 5v14M5 12h14"/>
+                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                <polyline points="17 21 17 13 7 13 7 21"/>
+                <polyline points="7 3 7 8 15 8"/>
               </svg>
-              创建用户
+              保存账号
             </button>
+            <span v-if="saveMessage" class="success-message">{{ saveMessage }}</span>
           </div>
         </section>
 
@@ -377,7 +345,7 @@ const tabs = [
   { id: 'llm', label: 'LLM 配置', icon: { render: () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [h('path', { d: 'M12 2a10 10 0 0110 10 10 10 0 01-10 10A10 10 0 012 12 10 10 0 0112 2z' }), h('path', { d: 'M12 6v6l4 2' })]) } },
   { id: 'system', label: '系统参数', icon: { render: () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [h('circle', { cx: 12, cy: 12, r: 3 }), h('path', { d: 'M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z' })]) } },
   { id: 'search', label: '搜索配置', icon: { render: () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [h('circle', { cx: 11, cy: 11, r: 8 }), h('path', { d: 'm21 21-4.35-4.35' })]) } },
-  { id: 'users', label: '用户管理', icon: { render: () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [h('path', { d: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2' }), h('circle', { cx: 9, cy: 7, r: 4 }), h('path', { d: 'M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' })]) } },
+  { id: 'account', label: '管理员账号', icon: { render: () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [h('path', { d: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2' }), h('circle', { cx: 12, cy: 7, r: 4 })]) } },
 ];
 
 const llmConfig = ref({
@@ -407,8 +375,10 @@ const searchConfig = ref({
   enabled: false,
 });
 
-const users = ref<any[]>([]);
-const newUser = ref({ username: '', password: '', role: 'user' });
+const accountForm = ref({
+  username: '',
+  newPassword: '',
+});
 
 async function handleLogin() {
   try {
@@ -432,7 +402,10 @@ async function loadConfig() {
     if (config.llm) llmConfig.value = config.llm;
     if (config.system) systemParams.value = config.system;
     if (config.search) searchConfig.value = config.search;
-    users.value = await adminStore.getUsers();
+
+    const account = await adminStore.getAccount();
+    accountForm.value.username = account.username || '';
+    accountForm.value.newPassword = '';
   } catch (error) {
     console.error('Failed to load config:', error);
   }
@@ -478,29 +451,21 @@ async function saveSearchConfig() {
   }
 }
 
-async function createUser() {
+async function saveAccount() {
   try {
-    await adminStore.createUser(newUser.value.username, newUser.value.password, newUser.value.role);
-    newUser.value = { username: '', password: '', role: 'user' };
-    users.value = await adminStore.getUsers();
+    await adminStore.updateAccount(
+      accountForm.value.username,
+      accountForm.value.newPassword || undefined
+    );
+    accountForm.value.newPassword = '';
+    showSaveMessage('账号更新成功，系统已保持为单管理员模式');
   } catch (error) {
-    console.error('Failed to create user:', error);
+    console.error('Failed to update account:', error);
   }
 }
 
-async function deleteUser(userId: number) {
-  if (confirm('确定要删除此用户吗？')) {
-    try {
-      await adminStore.deleteUser(userId);
-      users.value = await adminStore.getUsers();
-    } catch (error) {
-      console.error('Failed to delete user:', error);
-    }
-  }
-}
-
-function showSaveMessage() {
-  saveMessage.value = '保存成功！';
+function showSaveMessage(message = '保存成功！') {
+  saveMessage.value = message;
   setTimeout(() => (saveMessage.value = ''), 3000);
 }
 

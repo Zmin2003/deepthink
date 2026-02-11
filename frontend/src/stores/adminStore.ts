@@ -87,22 +87,16 @@ export const useAdminStore = defineStore('admin', {
       return response.data;
     },
 
-    async getUsers() {
-      const response = await authAxios.get('/admin/users');
+    async getAccount() {
+      const response = await authAxios.get('/admin/account');
       return response.data;
     },
 
-    async createUser(username: string, password: string, role: string) {
-      const response = await authAxios.post('/admin/users', {
+    async updateAccount(username: string, newPassword?: string) {
+      const response = await authAxios.put('/admin/account', {
         username,
-        password,
-        role,
+        newPassword,
       });
-      return response.data;
-    },
-
-    async deleteUser(userId: number) {
-      const response = await authAxios.delete(`/admin/users/${userId}`);
       return response.data;
     },
   },

@@ -38,10 +38,9 @@ const LoginSchema = z.object({
   password: z.string(),
 });
 
-const CreateUserSchema = z.object({
+const UpdateAdminAccountSchema = z.object({
   username: z.string().min(3),
-  password: z.string().min(6),
-  role: z.enum(['admin', 'user']),
+  newPassword: z.string().min(6).optional(),
 });
 
 /**
@@ -151,35 +150,31 @@ export async function adminRoutes(fastify: FastifyInstance) {
     return { success: true, config: maskSensitiveConfig(configStore.getSearchConfig()) };
   });
 
-  // 获取所有用户 - 不返回密码
-  fastify.get('/admin/users', async (request, reply) => {
-    const users = configStore.getAllUsers();
-    return users.map((u: any) => ({
-      id: u.id,
-      username: u.username,
-      role: u.role,
-      createdAt: u.createdAt,
-    }));
-  });
-
-  // 创建用户
-  fastify.post('/admin/users', async (request, reply) => {
-    const { username, password, role } = CreateUserSchema.parse(request.body);
-    const userId = configStore.createUser(username, password, role);
-    return { success: true, userId };
-  });
-
-  // 删除用户
-  fastify.delete('/admin/users/:userId', async (request, reply) => {
-    const { userId } = request.params as { userId: string };
+  // 获取当前管理员账号信息
+  fastify.get('/admin/account', async (request, reply) => {
     const currentUser = (request as any).user as JWTPayload;
+    const user = configStore.getUserById(parseInt(currentUser.userId));
 
-    // 防止删除自己
-    if (String(currentUser.userId) === userId) {
-      return reply.code(400).send({ error: 'Cannot delete yourself' });
+    if (!user) {
+      return reply.code(404).send({ error: 'User not found' });
     }
 
-    configStore.deleteUser(parseInt(userId));
+    return {
+      id: user.id,
+      username: user.username,
+      role: 'admin',
+      createdAt: user.createdAt,
+    };
+  });
+
+  // 更新当前管理员账号（用户名/密码）并清理为单管理员模式
+  fastify.put('/admin/account', async (request, reply) => {
+    const currentUser = (request as any).user as JWTPayload;
+    const { username, newPassword } = UpdateAdminAccountSchema.parse(request.body);
+
+    configStore.updateUserCredentials(parseInt(currentUser.userId), username, newPassword);
+    configStore.cleanupToSingleAdmin(parseInt(currentUser.userId));
+
     return { success: true };
   });
 

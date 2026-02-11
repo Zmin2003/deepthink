@@ -283,6 +283,47 @@ export class ConfigStore {
     return result[0]?.values[0]?.[0] as number || 0;
   }
 
+  getUserById(userId: number): User | null {
+    if (!this.db) return null;
+
+    const result = this.db.exec('SELECT * FROM users WHERE id = ?', [userId]);
+    if (!result[0] || result[0].values.length === 0) return null;
+
+    const row = result[0].values[0];
+    return {
+      id: row[0] as number,
+      username: row[1] as string,
+      passwordHash: row[2] as string,
+      role: row[3] as any,
+      createdAt: row[4] as number,
+      lastLoginAt: row[5] as number | undefined,
+    };
+  }
+
+  updateUserCredentials(userId: number, username: string, newPassword?: string) {
+    if (!this.db) return;
+
+    if (newPassword && newPassword.trim()) {
+      const passwordHash = bcrypt.hashSync(newPassword, 10);
+      this.db.run(
+        'UPDATE users SET username = ?, password_hash = ? WHERE id = ?',
+        [username, passwordHash, userId]
+      );
+    } else {
+      this.db.run('UPDATE users SET username = ? WHERE id = ?', [username, userId]);
+    }
+
+    this.save();
+  }
+
+  cleanupToSingleAdmin(currentAdminId: number) {
+    if (!this.db) return;
+
+    this.db.run('DELETE FROM users WHERE id != ?', [currentAdminId]);
+    this.db.run('UPDATE users SET role = ? WHERE id = ?', ['admin', currentAdminId]);
+    this.save();
+  }
+
   verifyUser(username: string, password: string): User | null {
     if (!this.db) return null;
 
