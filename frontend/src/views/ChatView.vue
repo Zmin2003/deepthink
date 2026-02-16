@@ -445,13 +445,12 @@ const thinking = computed(() => chatStore.thinking);
 
 
 const processSteps = computed<ProcessStep[]>(() => {
-  const steps = ['planner', 'search', 'experts', 'critic', 'reviewer', 'synthesizer'];
+  const steps = ['planner', 'file_analysis', 'search', 'experts', 'synthesizer'];
   const stepNames: Record<string, string> = {
     planner: '规划',
+    file_analysis: '文件分析',
     search: '搜索',
     experts: '专家',
-    critic: '批评',
-    reviewer: '评审',
     synthesizer: '综合',
   };
   const currentNode = thinking.value.currentNode;
@@ -719,7 +718,7 @@ function handleWebSocketMessage(data: any, startTime: number) {
       const expertsConfig = data.data.expertsConfig;
       for (const config of expertsConfig) {
         chatStore.addExpert({
-          id: `expert-pending-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: `expert-pending-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
           role: config.role,
           variant: config.variant || 'standard',
           thoughts: '',

@@ -98,7 +98,7 @@ export class TaskManager extends EventEmitter {
   }
 
   private generateTaskId(): string {
-    return `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `task_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   }
 
   // 清理过期任务 - single-pass iteration

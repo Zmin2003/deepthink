@@ -6,7 +6,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
   // 优先使用 VITE_API_BASE_URL，否则用 VITE_API_PORT 构建
-  let proxyTarget = 'http://localhost:3000'
+  let proxyTarget = 'http://localhost:3001'
   if (env.VITE_API_BASE_URL) {
     proxyTarget = env.VITE_API_BASE_URL
   } else if (env.VITE_API_PORT) {

@@ -63,6 +63,7 @@ export function useWebSocket() {
     onClose?: () => void
   ): Promise<void> {
     return new Promise((resolve, reject) => {
+      let settled = false;
       try {
         // 保存回调和 URL 用于重连
         currentUrl = url;
@@ -83,7 +84,7 @@ export function useWebSocket() {
           if (ws.value && ws.value.readyState !== WebSocket.OPEN) {
             ws.value.close();
             connectionState.value = 'error';
-            reject(new Error('连接超时'));
+            if (!settled) { settled = true; reject(new Error('连接超时')); }
           }
         }, 10000);
 
@@ -94,7 +95,7 @@ export function useWebSocket() {
           reconnectAttempts.value = 0;
           startPing();
           console.log('WebSocket connected');
-          resolve();
+          if (!settled) { settled = true; resolve(); }
         };
 
         ws.value.onmessage = (event) => {
@@ -137,14 +138,13 @@ export function useWebSocket() {
             attemptReconnect();
           } else if (event.code !== 1000) {
             connectionState.value = 'disconnected';
-            // 1000 是正常关闭
-            reject(new Error(event.reason || '连接已断开'));
+            if (!settled) { settled = true; reject(new Error(event.reason || '连接已断开')); }
           } else {
             connectionState.value = 'idle';
           }
         };
       } catch (error) {
-        reject(error);
+        if (!settled) { settled = true; reject(error); }
       }
     });
   }

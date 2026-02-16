@@ -49,7 +49,7 @@ export interface ExpertConfig {
   description: string;
   prompt: string;
   temperature: number;
-  variant: 'conservative' | 'creative';
+  variant: 'conservative' | 'creative' | 'standard';
 }
 
 export interface ExpertResult {

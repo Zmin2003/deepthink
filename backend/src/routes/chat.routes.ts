@@ -88,6 +88,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
       }
 
       reply.raw.end();
+      return;
     } else {
       // 非流式响应
       const result = await engine.invoke(query, { maxRounds, model });

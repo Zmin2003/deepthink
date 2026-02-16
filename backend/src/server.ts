@@ -90,6 +90,7 @@ export async function createServer() {
         error: 'Too many requests',
         message: `Rate limit exceeded. Max ${RATE_LIMIT_MAX} requests per minute.`,
       });
+      return;
     }
   });
 

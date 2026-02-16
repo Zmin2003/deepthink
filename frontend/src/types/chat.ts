@@ -31,7 +31,7 @@ export interface SearchResult {
 export interface ExpertResult {
   id: string;
   role: string;
-  variant: 'conservative' | 'creative';
+  variant: 'conservative' | 'creative' | 'standard';
   thoughts: string;
   content: string;
   round: number;

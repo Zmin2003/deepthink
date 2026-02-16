@@ -291,10 +291,10 @@ export class ConfigStore {
   }
 
   setLLMConfig(config: Partial<LLMConfig>) {
-    if (config.provider) this.setConfig('llm.provider', config.provider, 'llm');
-    if (config.apiKey) this.setConfig('llm.apiKey', config.apiKey, 'llm');
-    if (config.baseUrl) this.setConfig('llm.baseUrl', config.baseUrl, 'llm');
-    if (config.defaultModel) this.setConfig('llm.defaultModel', config.defaultModel, 'llm');
+    if (config.provider !== undefined) this.setConfig('llm.provider', config.provider, 'llm');
+    if (config.apiKey !== undefined) this.setConfig('llm.apiKey', config.apiKey, 'llm');
+    if (config.baseUrl !== undefined) this.setConfig('llm.baseUrl', config.baseUrl, 'llm');
+    if (config.defaultModel !== undefined) this.setConfig('llm.defaultModel', config.defaultModel, 'llm');
   }
 
   // System params helpers
@@ -309,11 +309,11 @@ export class ConfigStore {
   }
 
   setSystemParams(params: Partial<SystemParams>) {
-    if (params.maxRounds) this.setConfig('system.maxRounds', params.maxRounds.toString(), 'system');
-    if (params.qualityThreshold) this.setConfig('system.qualityThreshold', params.qualityThreshold.toString(), 'system');
-    if (params.planningLevel) this.setConfig('system.planningLevel', params.planningLevel, 'system');
-    if (params.expertLevel) this.setConfig('system.expertLevel', params.expertLevel, 'system');
-    if (params.synthesisLevel) this.setConfig('system.synthesisLevel', params.synthesisLevel, 'system');
+    if (params.maxRounds !== undefined) this.setConfig('system.maxRounds', params.maxRounds.toString(), 'system');
+    if (params.qualityThreshold !== undefined) this.setConfig('system.qualityThreshold', params.qualityThreshold.toString(), 'system');
+    if (params.planningLevel !== undefined) this.setConfig('system.planningLevel', params.planningLevel, 'system');
+    if (params.expertLevel !== undefined) this.setConfig('system.expertLevel', params.expertLevel, 'system');
+    if (params.synthesisLevel !== undefined) this.setConfig('system.synthesisLevel', params.synthesisLevel, 'system');
   }
 
   // Search config helpers

@@ -264,7 +264,15 @@ export class DeepThinkEngine {
   async *stream(query: string, config?: any): AsyncGenerator<any> {
     this.aborted = false;
     const llmCfg = llmConfig.get();
-    const llm = LLMFactory.createLLM({ ...llmCfg, ...config });
+    // Only merge LLM-relevant fields to avoid polluting provider cache key
+    const mergedLlmCfg = {
+      ...llmCfg,
+      ...(config?.apiKey ? { apiKey: config.apiKey } : {}),
+      ...(config?.baseUrl ? { baseUrl: config.baseUrl } : {}),
+      ...(config?.defaultModel ? { defaultModel: config.defaultModel } : {}),
+      ...(config?.provider ? { provider: config.provider } : {}),
+    };
+    const llm = LLMFactory.createLLM(mergedLlmCfg);
     const fileContext = config?.fileContext || '';
     const meaningfulFileText = extractMeaningfulFileText(fileContext);
     const hasMeaningfulFileText = meaningfulFileText.length >= 20;
@@ -278,7 +286,7 @@ export class DeepThinkEngine {
       expertsOutput: [],
       finalOutput: '',
       startTime: Date.now(),
-      config: { ...llmCfg, ...config },
+      config: mergedLlmCfg,
     };
 
     // Guard: 用户明确要求基于文件，但文件为空/不可解析时，直接返回，避免幻觉
@@ -384,42 +392,58 @@ export class DeepThinkEngine {
 
     const contextStr = state.context || '无额外上下文';
 
-    // Build expert task closures
+    // Build expert task closures — each task catches its own errors to avoid
+    // hanging the streaming while-loop when limitConcurrency rejects.
     const expertTasks = experts.map((expert: ExpertConfig) => async () => {
-      const expertPrompt = EXPERT_PROMPT
-        .replace('{role}', expert.role)
-        .replace('{description}', expert.description || '')
-        .replace('{query}', query)
-        .replace('{context}', contextStr);
+      let result: ExpertResult;
 
-      const expertResponse = await retryOnTransient(
-        () => withTimeout(
-          llm.complete({
-            messages: [
-              { role: 'user', content: expertPrompt },
-            ],
-            temperature: 0.7,
-          }),
-          EXPERT_TIMEOUT_MS,
+      try {
+        const expertPrompt = EXPERT_PROMPT
+          .replace('{role}', expert.role)
+          .replace('{description}', expert.description || '')
+          .replace('{query}', query)
+          .replace('{context}', contextStr);
+
+        const expertResponse = await retryOnTransient(
+          () => withTimeout(
+            llm.complete({
+              messages: [
+                { role: 'user', content: expertPrompt },
+              ],
+              temperature: 0.7,
+            }),
+            EXPERT_TIMEOUT_MS,
+            `Expert[${expert.role}]`,
+          ),
+          EXPERT_MAX_RETRIES,
+          EXPERT_RETRY_DELAY_MS,
           `Expert[${expert.role}]`,
-        ),
-        EXPERT_MAX_RETRIES,
-        EXPERT_RETRY_DELAY_MS,
-        `Expert[${expert.role}]`,
-      );
+        );
 
-      const thoughtsMatch = expertResponse.content.match(THOUGHTS_RE);
-      const responseMatch = expertResponse.content.match(RESPONSE_RE);
+        const thoughtsMatch = expertResponse.content.match(THOUGHTS_RE);
+        const responseMatch = expertResponse.content.match(RESPONSE_RE);
 
-      const result: ExpertResult = {
-        id: `expert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        role: expert.role,
-        variant: 'standard',
-        thoughts: thoughtsMatch ? thoughtsMatch[1].trim() : '',
-        content: responseMatch ? responseMatch[1].trim() : expertResponse.content,
-        round: 1,
-        status: 'completed',
-      };
+        result = {
+          id: `expert-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+          role: expert.role,
+          variant: 'standard',
+          thoughts: thoughtsMatch ? thoughtsMatch[1].trim() : '',
+          content: responseMatch ? responseMatch[1].trim() : expertResponse.content,
+          round: 1,
+          status: 'completed',
+        };
+      } catch (err: any) {
+        console.error(`[Expert][${expert.role}] Failed:`, err.message);
+        result = {
+          id: `expert-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+          role: expert.role,
+          variant: 'standard',
+          thoughts: '',
+          content: `Error: ${err.message}`,
+          round: 1,
+          status: 'error',
+        };
+      }
 
       // Push to queue for streaming yield
       if (resolveNext) {

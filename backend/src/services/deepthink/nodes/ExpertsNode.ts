@@ -62,7 +62,7 @@ export class ExpertsNode extends EventEmitter {
       const responseMatch = response.content.match(/<response>(.*?)<\/response>/s);
 
       return {
-        id: `expert-r${round}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `expert-r${round}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
         role: expert.role,
         variant: expert.variant || 'standard',
         thoughts: thoughtsMatch ? thoughtsMatch[1].trim() : '',
@@ -72,7 +72,7 @@ export class ExpertsNode extends EventEmitter {
       };
     } catch (error) {
       return {
-        id: `expert-r${round}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `expert-r${round}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
         role: expert.role,
         variant: expert.variant || 'standard',
         thoughts: '',
